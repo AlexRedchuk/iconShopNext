@@ -9,6 +9,8 @@ import { IncomingMessage } from "http";
 import { stripeWebhookHandler } from "./webhooks";
 import nextBuild from "next/dist/build";
 import path from "path";
+import { PayloadRequest } from "payload/types";
+import { parse } from "url";
 
 const app = express();
 
@@ -43,18 +45,32 @@ const start = async () => {
     },
   });
 
+  const cartRouter = express.Router();
+
+  cartRouter.use(payload.authenticate);
+
+  cartRouter.get("/", (req, res) => {
+    const request = req as PayloadRequest;
+    if (!request.user) return res.redirect("/sign-in?origin=cart");
+
+    const parsedURL = parse(req.url, true);
+
+    return nextApp.render(req, res, "/cart", parsedURL.query);
+  });
+
+  app.use("/cart", cartRouter)
+
   if (process.env.NEXT_BUILD) {
     app.listen(PORT, () => {
       payload.logger.info("Next.js is building for production");
     });
 
     // @ts-expect-error
-    await nextBuild(path.join(__dirname, "../"))
+    await nextBuild(path.join(__dirname, "../"));
 
-    process.exit()
+    process.exit();
   }
 
-  
   app.use(
     "/api/trpc",
     trpcExpress.createExpressMiddleware({
@@ -70,7 +86,6 @@ const start = async () => {
       payload.logger.info(
         `Next.js App URL: ${process.env.NEXT_PUBLIC_SERVER_URL}`
       );
-
     });
   });
 };
